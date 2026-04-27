@@ -4,17 +4,12 @@ const puppeteer = require("puppeteer");
 
 const app = express();
 
-// ✅ CORS fix (VERY IMPORTANT)
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors({ origin: "*" }));
 
-// ✅ Test route (check ke liye)
 app.get("/", (req, res) => {
   res.send("Backend Running 🚀");
 });
 
-// ✅ Search route
 app.get("/search", async (req, res) => {
   const query = req.query.q;
 
@@ -25,14 +20,23 @@ app.get("/search", async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.goto(`https://www.pinterest.com/search/pins/?q=${query}`);
 
-    await page.waitForTimeout(5000);
+    // 👇 IMPORTANT (bot detect avoid)
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+    );
+
+    await page.goto(`https://www.pinterest.com/search/pins/?q=${query}`, {
+      waitUntil: "networkidle2",
+      timeout: 0
+    });
+
+    await page.waitForTimeout(7000);
 
     const pins = await page.evaluate(() => {
       let results = [];
       document.querySelectorAll("img").forEach(img => {
-        if (img.alt) {
+        if (img.alt && img.src) {
           results.push({
             title: img.alt,
             image: img.src
@@ -44,14 +48,18 @@ app.get("/search", async (req, res) => {
 
     await browser.close();
 
+    // 👇 IMPORTANT (empty handle)
+    if (!pins || pins.length === 0) {
+      return res.json([]);
+    }
+
     res.json(pins);
 
   } catch (error) {
-    console.log(error);
+    console.log("SCRAPER ERROR:", error);
     res.status(500).json({ error: "Scraping failed" });
   }
 });
 
-// ✅ PORT FIX (IMPORTANT for Render)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on " + PORT));
+app.listen(PORT, () => console.log("Server running"));
